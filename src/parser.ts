@@ -1,14 +1,39 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const readline = require('readline');
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import readline from 'readline';
+import type {
+  JournalEntry,
+  HistoryEntry,
+  Query,
+  PromptData,
+  ProjectPromptData,
+  Session,
+  DailyUsage,
+  ModelBreakdown,
+  GrandTotals,
+  Insight,
+  DashboardData,
+  ContentBlock,
+} from './types.js';
 
-function getClaudeDir() {
+interface ProjectAggregate {
+  project: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  sessionCount: number;
+  queryCount: number;
+  modelMap: Record<string, ModelBreakdown>;
+  allPrompts: ProjectPromptData[];
+}
+
+function getClaudeDir(): string {
   return path.join(os.homedir(), '.claude');
 }
 
-async function parseJSONLFile(filePath) {
-  const lines = [];
+async function parseJSONLFile(filePath: string): Promise<JournalEntry[]> {
+  const lines: JournalEntry[] = [];
   const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
@@ -23,9 +48,9 @@ async function parseJSONLFile(filePath) {
   return lines;
 }
 
-function extractSessionData(entries) {
-  const queries = [];
-  let pendingUserMessage = null;
+function extractSessionData(entries: JournalEntry[]): Query[] {
+  const queries: Query[] = [];
+  let pendingUserMessage: { text: string | null; timestamp: string | undefined } | null = null;
 
   for (const entry of entries) {
     if (entry.type === 'user' && entry.message?.role === 'user') {
@@ -38,7 +63,7 @@ function extractSessionData(entries) {
 
       const textContent = typeof content === 'string'
         ? content
-        : content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+        : (content as ContentBlock[]).filter(b => b.type === 'text').map(b => b.text ?? '').join('\n').trim();
       pendingUserMessage = {
         text: textContent || null,
         timestamp: entry.timestamp,
@@ -55,7 +80,7 @@ function extractSessionData(entries) {
         + (usage.cache_read_input_tokens || 0);
       const outputTokens = usage.output_tokens || 0;
 
-      const tools = [];
+      const tools: string[] = [];
       if (Array.isArray(entry.message.content)) {
         for (const block of entry.message.content) {
           if (block.type === 'tool_use' && block.name) tools.push(block.name);
@@ -64,7 +89,7 @@ function extractSessionData(entries) {
 
       queries.push({
         userPrompt: pendingUserMessage?.text || null,
-        userTimestamp: pendingUserMessage?.timestamp || null,
+        userTimestamp: pendingUserMessage?.timestamp ?? null,
         assistantTimestamp: entry.timestamp,
         model,
         inputTokens,
@@ -78,20 +103,39 @@ function extractSessionData(entries) {
   return queries;
 }
 
-async function parseAllSessions() {
+async function parseAllSessions(): Promise<DashboardData> {
   const claudeDir = getClaudeDir();
   const projectsDir = path.join(claudeDir, 'projects');
 
   if (!fs.existsSync(projectsDir)) {
-    return { sessions: [], dailyUsage: [], modelBreakdown: [], topPrompts: [], totals: {} };
+    return {
+      sessions: [],
+      dailyUsage: [],
+      modelBreakdown: [],
+      projectBreakdown: [],
+      topPrompts: [],
+      totals: {
+        totalSessions: 0,
+        totalQueries: 0,
+        totalTokens: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        avgTokensPerQuery: 0,
+        avgTokensPerSession: 0,
+        dateRange: null,
+      },
+      insights: [],
+    };
   }
 
   // Read history.jsonl for prompt display text
   const historyPath = path.join(claudeDir, 'history.jsonl');
-  const historyEntries = fs.existsSync(historyPath) ? await parseJSONLFile(historyPath) : [];
+  const historyEntries: HistoryEntry[] = fs.existsSync(historyPath)
+    ? await parseJSONLFile(historyPath) as unknown as HistoryEntry[]
+    : [];
 
   // Build a map: sessionId -> first meaningful prompt
-  const sessionFirstPrompt = {};
+  const sessionFirstPrompt: Record<string, string> = {};
   for (const entry of historyEntries) {
     if (entry.sessionId && entry.display && !sessionFirstPrompt[entry.sessionId]) {
       const display = entry.display.trim();
@@ -104,10 +148,10 @@ async function parseAllSessions() {
     return fs.statSync(path.join(projectsDir, d)).isDirectory();
   });
 
-  const sessions = [];
-  const dailyMap = {};
-  const modelMap = {};
-  const allPrompts = []; // for "most expensive prompts" across all sessions
+  const sessions: Session[] = [];
+  const dailyMap: Record<string, DailyUsage> = {};
+  const modelMap: Record<string, ModelBreakdown> = {};
+  const allPrompts: PromptData[] = []; // for "most expensive prompts" across all sessions
 
   for (const projectDir of projectDirs) {
     const dir = path.join(projectsDir, projectDir);
@@ -117,7 +161,7 @@ async function parseAllSessions() {
       const filePath = path.join(dir, file);
       const sessionId = path.basename(file, '.jsonl');
 
-      let entries;
+      let entries: JournalEntry[];
       try {
         entries = await parseJSONLFile(filePath);
       } catch {
@@ -139,7 +183,7 @@ async function parseAllSessions() {
       const date = firstTimestamp ? firstTimestamp.split('T')[0] : 'unknown';
 
       // Primary model
-      const modelCounts = {};
+      const modelCounts: Record<string, number> = {};
       for (const q of queries) {
         modelCounts[q.model] = (modelCounts[q.model] || 0) + 1;
       }
@@ -151,9 +195,9 @@ async function parseAllSessions() {
 
       // Collect per-prompt data for "most expensive prompts"
       // Group consecutive queries under the same user prompt
-      let currentPrompt = null;
+      let currentPrompt: string | null = null;
       let promptInput = 0, promptOutput = 0;
-      const flushPrompt = () => {
+      const flushPrompt = (): void => {
         if (currentPrompt && (promptInput + promptOutput) > 0) {
           allPrompts.push({
             prompt: currentPrompt.substring(0, 300),
@@ -221,7 +265,7 @@ async function parseAllSessions() {
   sessions.sort((a, b) => b.totalTokens - a.totalTokens);
 
   // Build per-project aggregation
-  const projectMap = {};
+  const projectMap: Record<string, ProjectAggregate> = {};
   for (const session of sessions) {
     const proj = session.project;
     if (!projectMap[proj]) {
@@ -253,9 +297,9 @@ async function parseAllSessions() {
     }
 
     // Per-project prompt grouping with tool tracking
-    let curPrompt = null, curInput = 0, curOutput = 0, curConts = 0;
-    let curModels = {}, curTools = {};
-    const flushProjectPrompt = () => {
+    let curPrompt: string | null = null, curInput = 0, curOutput = 0, curConts = 0;
+    let curModels: Record<string, number> = {}, curTools: Record<string, number> = {};
+    const flushProjectPrompt = (): void => {
       if (curPrompt && (curInput + curOutput) > 0) {
         const topModel = Object.entries(curModels).sort((a, b) => b[1] - a[1])[0]?.[0] || session.model;
         p.allPrompts.push({
@@ -305,7 +349,7 @@ async function parseAllSessions() {
   allPrompts.sort((a, b) => b.totalTokens - a.totalTokens);
   const topPrompts = allPrompts.slice(0, 20);
 
-  const grandTotals = {
+  const grandTotals: GrandTotals = {
     totalSessions: sessions.length,
     totalQueries: sessions.reduce((sum, s) => sum + s.queryCount, 0),
     totalTokens: sessions.reduce((sum, s) => sum + s.totalTokens, 0),
@@ -338,8 +382,8 @@ async function parseAllSessions() {
   };
 }
 
-function generateInsights(sessions, allPrompts, totals) {
-  const insights = [];
+function generateInsights(sessions: Session[], allPrompts: PromptData[], totals: GrandTotals): Insight[] {
+  const insights: Insight[] = [];
 
   // 1. Short, vague messages that cost a lot
   const shortExpensive = allPrompts.filter(p => p.prompt.trim().length < 30 && p.totalTokens > 100_000);
@@ -409,7 +453,7 @@ function generateInsights(sessions, allPrompts, totals) {
 
   // 5. Day-of-week pattern
   if (sessions.length >= 10) {
-    const dayOfWeekMap = {};
+    const dayOfWeekMap: Record<number, { tokens: number; sessions: number }> = {};
     for (const s of sessions) {
       if (!s.timestamp) continue;
       const d = new Date(s.timestamp);
@@ -419,7 +463,7 @@ function generateInsights(sessions, allPrompts, totals) {
       dayOfWeekMap[day].sessions += 1;
     }
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const days = Object.entries(dayOfWeekMap).map(([d, v]) => ({ day: dayNames[d], ...v, avg: v.tokens / v.sessions }));
+    const days = Object.entries(dayOfWeekMap).map(([d, v]) => ({ day: dayNames[Number(d)], ...v, avg: v.tokens / v.sessions }));
     if (days.length >= 3) {
       days.sort((a, b) => b.avg - a.avg);
       const busiest = days[0];
@@ -476,7 +520,7 @@ function generateInsights(sessions, allPrompts, totals) {
 
   // 8. One project dominates usage
   if (sessions.length >= 5) {
-    const projectTokens = {};
+    const projectTokens: Record<string, number> = {};
     for (const s of sessions) {
       const proj = s.project || 'unknown';
       projectTokens[proj] = (projectTokens[proj] || 0) + s.totalTokens;
@@ -484,8 +528,9 @@ function generateInsights(sessions, allPrompts, totals) {
     const sorted = Object.entries(projectTokens).sort((a, b) => b[1] - a[1]);
     if (sorted.length >= 2) {
       const [topProject, topTokens] = sorted[0];
-      const pct = ((topTokens / Math.max(totals.totalTokens, 1)) * 100).toFixed(0);
-      if (pct >= 60) {
+      const pctNum = (topTokens / Math.max(totals.totalTokens, 1)) * 100;
+      const pct = pctNum.toFixed(0);
+      if (pctNum >= 60) {
         const projName = topProject.replace(/^C--Users-[^-]+-?/, '').replace(/^Projects-?/, '').replace(/-/g, '/') || '~';
         insights.push({
           id: 'project-dominance',
@@ -505,8 +550,9 @@ function generateInsights(sessions, allPrompts, totals) {
     if (shortSessions.length >= 3 && longSessions2.length >= 2) {
       const shortAvg = Math.round(shortSessions.reduce((s, ses) => s + ses.totalTokens / ses.queryCount, 0) / shortSessions.length);
       const longAvg = Math.round(longSessions2.reduce((s, ses) => s + ses.totalTokens / ses.queryCount, 0) / longSessions2.length);
-      const ratio = (longAvg / Math.max(shortAvg, 1)).toFixed(1);
-      if (ratio >= 2) {
+      const ratioNum = longAvg / Math.max(shortAvg, 1);
+      const ratio = ratioNum.toFixed(1);
+      if (ratioNum >= 2) {
         insights.push({
           id: 'conversation-efficiency',
           type: 'warning',
@@ -540,11 +586,11 @@ function generateInsights(sessions, allPrompts, totals) {
   return insights;
 }
 
-function fmt(n) {
+function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 10_000) return (n / 1_000).toFixed(0) + 'K';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 }
 
-module.exports = { parseAllSessions };
+export { parseAllSessions };

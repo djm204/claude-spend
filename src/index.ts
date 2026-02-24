@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { createServer } = require('./server');
+import { createServer } from './server.js';
 
 const args = process.argv.slice(2);
 
@@ -34,7 +34,7 @@ if (isNaN(port)) {
 
 const app = createServer();
 
-const server = app.listen(port, async () => {
+const server = app.listen(port, '127.0.0.1', async () => {
   const url = `http://localhost:${port}`;
   console.log(`\n  claude-spend dashboard running at ${url}\n`);
 
@@ -48,7 +48,7 @@ const server = app.listen(port, async () => {
   }
 });
 
-server.on('error', (err) => {
+server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Try --port <other-port>`);
     process.exit(1);
