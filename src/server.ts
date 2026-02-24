@@ -29,6 +29,26 @@ function createServer(): express.Express {
     }
   });
 
+  app.get('/api/session/:id', async (req: Request, res: Response) => {
+    try {
+      if (!cachedData) {
+        cachedData = await parseAllSessions();
+      }
+      const session = cachedData.sessions.find(s => s.sessionId === req.params.id);
+      if (!session) {
+        res.status(404).json({ error: 'Session not found' });
+        return;
+      }
+      res.json({
+        ...session,
+        billingContext: cachedData.billingContext,
+        isEquivalentCost: cachedData.isEquivalentCost,
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // Serve static dashboard
   app.use(express.static(path.join(__dirname, 'public')));
 
