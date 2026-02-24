@@ -605,12 +605,13 @@
   <div class="hero-section animate delay-1">
     <h2 class="hero-title">Your Claude Code usage, visualized.</h2>
     <p class="hero-subtitle">See where your tokens actually go.</p>
+    <div id="billingBadge" style="display:inline-block;margin-top:10px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;background:#EEF2FF;color:#4F46E5;border:1px solid rgba(99,102,241,0.15)"></div>
   </div>
 
   <!-- Stats -->
   <div class="stats-row" id="statsRow"></div>
   <div id="tokenExplainer" class="token-explainer animate delay-2">
-    Tokens are how AI measures text -- roughly 1 token = 1 word. Hover over any label with a <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:rgba(0,0,0,0.08);font-size:10px;font-weight:700;vertical-align:middle;">?</span> for an explanation.
+    Tokens are how AI measures text -- roughly 1 token = 1 word. Hover over any label with a <span class="help-icon" style="display:inline-flex;vertical-align:middle;">?</span> for an explanation.
   </div>
 
   <!-- Insights -->
@@ -655,6 +656,7 @@
         <thead>
           <tr>
             <th>Project</th>
+            <th style="text-align:right">Cost</th>
             <th style="text-align:right">Total Tokens</th>
             <th style="text-align:right">Sessions</th>
             <th style="text-align:right">Queries</th>
@@ -708,9 +710,10 @@
             <th data-sort="prompt">What you asked</th>
             <th data-sort="model" class="has-tooltip has-tooltip-below">Model<div class="tooltip">Which AI model was used. Opus is the most capable (and uses more tokens), Sonnet is faster and lighter.</div></th>
             <th data-sort="queries" style="text-align:right" class="has-tooltip has-tooltip-below">Messages<div class="tooltip">How many back-and-forth messages happened in this conversation, including automatic tool calls Claude made.</div></th>
-            <th data-sort="total" style="text-align:right" class="sorted has-tooltip has-tooltip-below">Total tokens<div class="tooltip">The total number of tokens used in this conversation. Higher means more expensive. Long conversations cost more because Claude re-reads everything each turn.</div></th>
-            <th data-sort="input" style="text-align:right" class="has-tooltip has-tooltip-below">Read<div class="tooltip">Tokens Claude read: your messages, the conversation history, files, and system context. This grows with each message because the full history gets re-sent.</div></th>
-            <th data-sort="output" style="text-align:right" class="has-tooltip has-tooltip-below">Written<div class="tooltip">Tokens Claude wrote back: responses, code, explanations. Usually a small fraction of the total.</div></th>
+            <th data-sort="cost" style="text-align:right" class="sorted has-tooltip has-tooltip-below">Cost<div class="tooltip">Dollar cost of this conversation based on per-token API rates. For subscription users, this shows equivalent API cost.</div></th>
+            <th data-sort="total" style="text-align:right" class="has-tooltip has-tooltip-below">Total tokens<div class="tooltip">The total number of tokens used in this conversation.</div></th>
+            <th data-sort="input" style="text-align:right" class="has-tooltip has-tooltip-below">Read<div class="tooltip">Tokens Claude read: your messages, the conversation history, files, and system context.</div></th>
+            <th data-sort="output" style="text-align:right" class="has-tooltip has-tooltip-below">Written<div class="tooltip">Tokens Claude wrote back: responses, code, explanations.</div></th>
           </tr>
         </thead>
         <tbody id="sessionsBody"></tbody>
@@ -725,7 +728,7 @@
 
 <script>
 let DATA = null;
-let currentSort = { key: 'total', dir: 'desc' };
+let currentSort = { key: 'cost', dir: 'desc' };
 let searchQuery = '';
 
 function fmt(n) {
@@ -735,6 +738,12 @@ function fmt(n) {
   return n.toLocaleString();
 }
 function fmtFull(n) { return n.toLocaleString(); }
+function fmtCost(n) {
+  if (n >= 100) return '$' + n.toFixed(0);
+  if (n >= 0.01) return '$' + n.toFixed(2);
+  if (n >= 0.001) return '$' + n.toFixed(3);
+  return '$' + n.toFixed(4);
+}
 
 function modelClass(m) {
   if (m.includes('opus')) return 'model-opus';
@@ -805,6 +814,18 @@ async function refreshData() {
 function render() {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+
+  // Billing badge
+  const badge = document.getElementById('billingBadge');
+  const labels = { api: 'API Billing', pro: 'Pro Plan', max_5x: 'Max 5x Plan', max_20x: 'Max 20x Plan' };
+  if (DATA.isEquivalentCost) {
+    badge.textContent = (labels[DATA.billingContext] || 'Subscription') + ' — showing equivalent API cost';
+    badge.style.display = 'inline-block';
+  } else {
+    badge.textContent = labels[DATA.billingContext] || 'API Billing';
+    badge.style.display = 'inline-block';
+  }
+
   renderStats();
   renderInsights();
   renderDailyChart();
@@ -820,15 +841,19 @@ function renderStats() {
   const range = t.dateRange ? `${formatDate(t.dateRange.from)} - ${formatDate(t.dateRange.to)}` : '';
   document.getElementById('dateRange').textContent = range;
 
+  const costLabel = DATA.isEquivalentCost ? 'Equivalent Cost' : 'Total Cost';
+  const costTip = DATA.isEquivalentCost
+    ? 'What your usage would cost at API rates. Since you are on a subscription, this is not your actual bill — it shows the equivalent API value so you can gauge your plan\'s worth.'
+    : 'The total dollar cost of your Claude Code usage across all conversations, calculated from per-token API rates.';
   const cards = [
-    { label: 'Total Usage', value: fmt(t.totalTokens), sub: `${fmt(t.totalInputTokens)} read by Claude + ${fmt(t.totalOutputTokens)} written back`,
-      tip: 'The total number of tokens used across all your conversations. This includes everything Claude reads (your messages, conversation history, files) plus everything Claude writes back.' },
-    { label: 'Conversations', value: fmtFull(t.totalSessions), sub: `Each one used ~${fmt(t.avgTokensPerSession)} tokens on average`,
-      tip: 'Each time you start Claude Code and begin chatting, that counts as one conversation. A new conversation starts fresh with no prior context.' },
-    { label: 'Messages Sent', value: fmtFull(t.totalQueries), sub: `Each message cost ~${fmt(t.avgTokensPerQuery)} tokens on average`,
-      tip: 'Every time you hit Enter and send something to Claude, that is one message. This includes follow-up tool calls Claude makes automatically behind the scenes.' },
-    { label: 'Claude Wrote', value: fmt(t.totalOutputTokens), sub: `Only ${((t.totalOutputTokens / Math.max(t.totalTokens, 1)) * 100).toFixed(1)}% of total -- most usage is from re-reading context`,
-      tip: 'The tokens Claude spent writing responses, code, and explanations. This is usually a tiny fraction of total usage because most tokens go toward re-reading your conversation history.' },
+    { label: costLabel, value: fmtCost(t.totalCostUSD), sub: `${fmtCost(t.avgCostPerSession)} avg/session · ${fmtCost(t.totalCacheSavings)} saved by cache`,
+      tip: costTip, gradient: 'var(--gradient-main)' },
+    { label: 'Total Tokens', value: fmt(t.totalTokens), sub: `${fmt(t.totalInputTokens)} read + ${fmt(t.totalOutputTokens)} written`,
+      tip: 'The total number of tokens used across all your conversations.' },
+    { label: 'Conversations', value: fmtFull(t.totalSessions), sub: `~${fmtCost(t.avgCostPerSession)} each · ~${fmt(t.avgTokensPerSession)} tokens`,
+      tip: 'Each time you start Claude Code and begin chatting, that counts as one conversation.' },
+    { label: 'Cost per Message', value: fmtCost(t.avgCostPerQuery), sub: `${fmtFull(t.totalQueries)} messages across ${t.totalSessions} sessions`,
+      tip: 'Average cost per message sent. Includes follow-up tool calls Claude makes automatically.' },
   ];
 
   document.getElementById('statsRow').innerHTML = cards.map((c, i) => `
@@ -1000,11 +1025,13 @@ function renderModelChart() {
   ctx.fillStyle = '#94A3B8';
   ctx.fillText('total', cx, cy + 16);
 
+  const totalCost = slices.reduce((s, d) => s + (d.costUSD || 0), 0);
   document.getElementById('modelLegend').innerHTML = slices.map(d => {
     const pct = ((d.totalTokens / total) * 100).toFixed(1);
+    const costPct = totalCost > 0 ? (((d.costUSD || 0) / totalCost) * 100).toFixed(1) : '0.0';
     return `<div class="legend-item">
       <div class="legend-dot" style="background:${getColors(d.model)[0]}"></div>
-      <span><strong>${modelShort(d.model)}</strong> &ndash; ${fmt(d.totalTokens)} (${pct}%)</span>
+      <span><strong>${modelShort(d.model)}</strong> &ndash; ${fmtCost(d.costUSD || 0)} (${costPct}% of cost) &middot; ${fmt(d.totalTokens)} tokens (${pct}%)</span>
     </div>`;
   }).join('');
 }
@@ -1028,8 +1055,8 @@ function buildDrawerContent(p) {
       '<span class="tool-chip">' + count + '\u00d7\u00a0' + escapeHtml(name) + '</span>'
     ).join('') + (pr.continuations > 0 ? '<span class="tool-chip">+' + pr.continuations + ' turns</span>' : '');
     const badge = '<span class="model-badge ' + modelClass(pr.model) + '"><span class="model-dot"></span>' + modelShort(pr.model) + '</span>';
-    const tokVal = fmt(pr.totalTokens);
-    const tokSub = fmt(pr.inputTokens) + ' / ' + fmt(pr.outputTokens);
+    const tokVal = fmtCost(pr.costUSD);
+    const tokSub = fmt(pr.totalTokens) + ' tokens';
     const promptText = escapeHtml(pr.prompt);
     const sid = pr.sessionId;
     return [
@@ -1078,6 +1105,7 @@ function renderProjectBreakdown() {
       '<div class="proj-name" title="' + projectFull(p.project) + '">' + escapeHtml(projectShort(p.project)) + '</div>',
       '<ul class="model-pills" aria-label="Models used: ' + ariaLabel + '">' + pillItems + '</ul>',
       '</div></div></td>',
+      '<td class="token-num" style="font-weight:700;vertical-align:top;padding-top:12px;color:#4F46E5">' + fmtCost(p.costUSD) + '</td>',
       '<td class="token-num" style="font-weight:700;vertical-align:top;padding-top:12px">',
       '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">',
       '<div style="flex:1;max-width:60px;height:3px;background:var(--bg);border-radius:4px;overflow:hidden">',
@@ -1089,7 +1117,7 @@ function renderProjectBreakdown() {
     ].join('');
     const drawerRow = [
       '<tr class="proj-drawer" id="proj-drawer-' + i + '">',
-      '<td colspan="4"><div class="proj-drawer-inner"><div class="proj-drawer-content">',
+      '<td colspan="5"><div class="proj-drawer-inner"><div class="proj-drawer-content">',
       buildDrawerContent(p),
       '</div></div></td></tr>',
     ].join('');
@@ -1117,8 +1145,8 @@ function renderTopPrompts() {
         </div>
       </div>
       <div class="prompt-tokens">
-        <div class="value">${fmt(p.totalTokens)}</div>
-        <div class="sub">${fmt(p.inputTokens)} read &middot; ${fmt(p.outputTokens)} written</div>
+        <div class="value" style="color:#4F46E5">${fmtCost(p.costUSD)}</div>
+        <div class="sub">${fmt(p.totalTokens)} tokens</div>
       </div>
     </div>`;
   }).join('');
@@ -1141,11 +1169,12 @@ function renderSessions() {
     prompt: (a, b) => a.firstPrompt.localeCompare(b.firstPrompt),
     model: (a, b) => a.model.localeCompare(b.model),
     queries: (a, b) => a.queryCount - b.queryCount,
+    cost: (a, b) => a.costUSD - b.costUSD,
     total: (a, b) => a.totalTokens - b.totalTokens,
     input: (a, b) => a.inputTokens - b.inputTokens,
     output: (a, b) => a.outputTokens - b.outputTokens,
   };
-  const fn = sortFns[currentSort.key] || sortFns.total;
+  const fn = sortFns[currentSort.key] || sortFns.cost;
   sessions.sort((a, b) => currentSort.dir === 'desc' ? fn(b, a) : fn(a, b));
 
   document.getElementById('sessionCount').textContent = `${sessions.length} sessions`;
@@ -1159,7 +1188,8 @@ function renderSessions() {
       <td><div class="prompt-preview" title="${escapeHtml(s.firstPrompt)}">${escapeHtml(s.firstPrompt)}</div></td>
       <td><span class="model-badge ${modelClass(s.model)}"><span class="model-dot"></span>${modelShort(s.model)}</span></td>
       <td class="token-num">${s.queryCount}</td>
-      <td class="token-num" style="font-weight:700">${fmt(s.totalTokens)}</td>
+      <td class="token-num" style="font-weight:700;color:#4F46E5">${fmtCost(s.costUSD)}</td>
+      <td class="token-num">${fmt(s.totalTokens)}</td>
       <td class="token-num">${fmt(s.inputTokens)}</td>
       <td class="token-num">${fmt(s.outputTokens)}</td>
     </tr>
@@ -1188,20 +1218,28 @@ function openDrilldown(sessionId) {
   const session = DATA.sessions.find(s => s.sessionId === sessionId);
   if (!session) return;
 
+  const cacheNote = session.cacheEfficiency > 0
+    ? ` \u00B7 ${(session.cacheEfficiency * 100).toFixed(0)}% cache hit rate`
+    : '';
+  const subagentNote = session.subagentCost > 0
+    ? ` \u00B7 ${fmtCost(session.subagentCost)} in subagents`
+    : '';
   document.getElementById('drilldownTitle').textContent = session.firstPrompt.substring(0, 140);
-  document.getElementById('drilldownMeta').textContent =
-    `${formatDate(session.date)} \u00B7 ${modelShort(session.model)} \u00B7 ${session.queryCount} messages \u00B7 ${fmt(session.totalTokens)} tokens used`;
+  document.getElementById('drilldownMeta').innerHTML =
+    `${formatDate(session.date)} \u00B7 ${modelShort(session.model)} \u00B7 ${session.queryCount} messages \u00B7 <strong style="color:#4F46E5">${fmtCost(session.costUSD)}</strong> \u00B7 ${fmt(session.totalTokens)} tokens${cacheNote}${subagentNote}`;
 
   const grouped = [];
   let current = null;
   for (const q of session.queries) {
     if (q.userPrompt) {
       if (current) grouped.push(current);
-      current = { prompt: q.userPrompt, inputTokens: q.inputTokens, outputTokens: q.outputTokens, totalTokens: q.totalTokens, continuations: 0 };
+      current = { prompt: q.userPrompt, inputTokens: q.inputTokens, outputTokens: q.outputTokens, totalTokens: q.totalTokens, costUSD: q.costUSD, cumulativeCost: q.cumulativeCost, continuations: 0 };
     } else if (current) {
       current.inputTokens += q.inputTokens;
       current.outputTokens += q.outputTokens;
       current.totalTokens += q.totalTokens;
+      current.costUSD += q.costUSD;
+      current.cumulativeCost = q.cumulativeCost;
       current.continuations++;
     }
   }
@@ -1213,8 +1251,9 @@ function openDrilldown(sessionId) {
       <div class="query-num">${i + 1}</div>
       <div class="query-prompt">${escapeHtml(q.prompt.substring(0, 500))}</div>
       <div class="query-tokens-col">
-        <div class="total">${fmt(q.totalTokens)}</div>
-        <div class="detail">${fmt(q.inputTokens)} read / ${fmt(q.outputTokens)} written${cont}</div>
+        <div class="total" style="color:#4F46E5">${fmtCost(q.costUSD)}</div>
+        <div class="detail">${fmt(q.totalTokens)} tokens${cont}</div>
+        <div class="detail" style="color:var(--text-tertiary)">running: ${fmtCost(q.cumulativeCost)}</div>
       </div>
     </div>`;
   }).join('');
