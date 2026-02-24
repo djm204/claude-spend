@@ -2,13 +2,17 @@
   "name": "claude-spend",
   "version": "1.0.0",
   "description": "See where your Claude Code tokens go. One command, zero setup.",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "bin": {
-    "claude-spend": "src/index.js"
+    "claude-spend": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && shx cp -r src/public dist/public",
-    "start": "node src/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "claude",
