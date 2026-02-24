@@ -1,3 +1,5 @@
+import type { BillingContext, CostBreakdown } from './pricing.js';
+
 // Raw JSONL entry types (input from ~/.claude files)
 
 export interface ContentBlock {
@@ -39,7 +41,12 @@ export interface Query {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
   totalTokens: number;
+  costUSD: number;
+  cacheSavings: number;
+  cumulativeCost: number;
   tools: string[];
 }
 
@@ -48,6 +55,7 @@ export interface PromptData {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costUSD: number;
   date: string;
   sessionId: string;
   model: string;
@@ -56,6 +64,12 @@ export interface PromptData {
 export interface ProjectPromptData extends PromptData {
   continuations: number;
   toolCounts: Record<string, number>;
+}
+
+export interface CostCurvePoint {
+  messageIndex: number;
+  timestamp: string;
+  cumulativeCost: number;
 }
 
 export interface Session {
@@ -70,6 +84,12 @@ export interface Session {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costUSD: number;
+  cacheSavings: number;
+  cacheEfficiency: number;
+  costCurve: CostCurvePoint[];
+  subagentCost: number;
+  subagentQueries: Query[];
 }
 
 export interface DailyUsage {
@@ -77,6 +97,7 @@ export interface DailyUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costUSD: number;
   sessions: number;
   queries: number;
 }
@@ -86,6 +107,7 @@ export interface ModelBreakdown {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costUSD: number;
   queryCount: number;
 }
 
@@ -94,6 +116,7 @@ export interface ProjectBreakdown {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costUSD: number;
   sessionCount: number;
   queryCount: number;
   modelBreakdown: ModelBreakdown[];
@@ -111,8 +134,12 @@ export interface GrandTotals {
   totalTokens: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCostUSD: number;
+  totalCacheSavings: number;
   avgTokensPerQuery: number;
   avgTokensPerSession: number;
+  avgCostPerSession: number;
+  avgCostPerQuery: number;
   dateRange: DateRange | null;
 }
 
@@ -134,4 +161,8 @@ export interface DashboardData {
   topPrompts: PromptData[];
   totals: GrandTotals;
   insights: Insight[];
+  billingContext: BillingContext;
+  isEquivalentCost: boolean;
 }
+
+export type { BillingContext, CostBreakdown };
