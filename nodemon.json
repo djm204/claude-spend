@@ -1,0 +1,6 @@
+{
+  "watch": ["src"],
+  "ext": "ts,html,css,js",
+  "ignore": ["dist"],
+  "exec": "npm run build && node dist/index.js --no-open"
+}
