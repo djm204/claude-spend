@@ -48,6 +48,23 @@
     --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
   }
 
+  /* Dark theme overrides */
+  [data-theme="dark"] {
+    --bg: #0F172A;
+    --bg-mesh-1: #1E293B;
+    --bg-mesh-2: #1A2332;
+    --white: #1E293B;
+    --text: #E2E8F0;
+    --text-secondary: #94A3B8;
+    --text-tertiary: #64748B;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.12);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.4);
+    --shadow-glow: 0 0 40px rgba(99,102,241,0.25);
+  }
+
   body {
     font-family: var(--font);
     background: var(--bg);
@@ -55,6 +72,7 @@
     line-height: 1.6;
     min-height: 100vh;
     overflow-x: hidden;
+    transition: background 0.3s, color 0.3s;
   }
 
   /* Mesh gradient background */
@@ -66,6 +84,12 @@
       radial-gradient(ellipse 60% 50% at 90% 10%, rgba(139,92,246,0.08) 0%, transparent 50%),
       radial-gradient(ellipse 50% 40% at 50% 20%, rgba(20,184,166,0.06) 0%, transparent 50%);
     pointer-events: none; z-index: 0;
+  }
+  [data-theme="dark"] body::before {
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(99,102,241,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 10%, rgba(139,92,246,0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 40% at 50% 20%, rgba(20,184,166,0.08) 0%, transparent 50%);
   }
 
   /* Loading */
@@ -568,6 +592,44 @@
     font-size: 15px; color: var(--text-secondary); font-weight: 500;
     max-width: 600px; margin: 0 auto; line-height: 1.7;
   }
+
+  /* ---- THEME TOGGLE ---- */
+  .theme-toggle {
+    background: var(--white); border: 1px solid var(--border);
+    color: var(--text-secondary); width: 36px; height: 36px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .theme-toggle:hover {
+    border-color: var(--indigo); color: var(--indigo);
+    box-shadow: 0 2px 8px rgba(99,102,241,0.12);
+  }
+  .theme-toggle svg { width: 16px; height: 16px; }
+  .theme-toggle .icon-sun { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+  /* ---- DARK MODE OVERRIDES for hardcoded colors ---- */
+  [data-theme="dark"] .prompt-row:hover { background: #2D3748; }
+  [data-theme="dark"] .proj-row:hover td { background: #2D3748; }
+  [data-theme="dark"] .proj-drawer-inner { background: #1A2332; }
+  [data-theme="dark"] .drawer-prompt-row { background: #1E293B; }
+  [data-theme="dark"] .sessions-table th { background: #1A2332; }
+  [data-theme="dark"] .sessions-table tbody tr:hover td { background: #2D3748; }
+  [data-theme="dark"] .query-item:hover { background: rgba(99,102,241,0.15); }
+  [data-theme="dark"] .query-item { background: rgba(255,255,255,0.04); }
+  [data-theme="dark"] .help-icon { background: rgba(255,255,255,0.1); }
+  [data-theme="dark"] .model-opus { background: rgba(99,102,241,0.2); color: #A5B4FC; }
+  [data-theme="dark"] .model-sonnet { background: rgba(16,185,129,0.2); color: #6EE7B7; }
+  [data-theme="dark"] .model-haiku { background: rgba(249,115,22,0.2); color: #FDBA74; }
+  [data-theme="dark"] .model-unknown { background: rgba(148,163,184,0.2); color: #CBD5E1; }
+  [data-theme="dark"] .drilldown-close { background: rgba(255,255,255,0.08); }
+  [data-theme="dark"] .drilldown-close:hover { background: rgba(99,102,241,0.2); color: #A5B4FC; }
+  [data-theme="dark"] .privacy-notice { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.2); }
+  [data-theme="dark"] .insight-card.warning .insight-indicator { background: linear-gradient(135deg, rgba(254,243,199,0.3), rgba(253,230,138,0.3)); }
+  [data-theme="dark"] .insight-card.info .insight-indicator { background: linear-gradient(135deg, rgba(224,231,255,0.3), rgba(199,210,254,0.3)); }
+  [data-theme="dark"] .insight-card.neutral .insight-indicator { background: linear-gradient(135deg, rgba(241,245,249,0.2), rgba(226,232,240,0.2)); }
 </style>
 </head>
 <body>
@@ -598,6 +660,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
         Refresh
       </button>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
     </div>
   </div>
 
@@ -605,7 +671,7 @@
   <div class="hero-section animate delay-1">
     <h2 class="hero-title">Your Claude Code usage, visualized.</h2>
     <p class="hero-subtitle">See where your tokens actually go.</p>
-    <div id="billingBadge" style="display:inline-block;margin-top:10px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;background:#EEF2FF;color:#4F46E5;border:1px solid rgba(99,102,241,0.15)"></div>
+    <div id="billingBadge" style="display:inline-block;margin-top:10px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;background:var(--white);color:var(--indigo);border:1px solid var(--border)"></div>
   </div>
 
   <!-- Stats -->
@@ -727,6 +793,23 @@
 </div>
 
 <script>
+// Theme management
+function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('claude-spend-theme', theme);
+}
+function toggleTheme() {
+  applyTheme(isDark() ? 'light' : 'dark');
+  if (DATA) { renderDailyChart(); renderModelChart(); }
+}
+// Init theme: check localStorage, then OS preference
+(function() {
+  const saved = localStorage.getItem('claude-spend-theme');
+  if (saved) { applyTheme(saved); }
+  else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { applyTheme('dark'); }
+})();
+
 let DATA = null;
 let currentSort = { key: 'cost', dir: 'desc' };
 let searchQuery = '';
@@ -913,14 +996,16 @@ function renderDailyChart() {
   const startX = 48;
 
   // Grid
+  const gridColor = isDark() ? '#64748B' : '#94A3B8';
+  const gridLine = isDark() ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
   ctx.font = '500 10px Inter, system-ui';
-  ctx.fillStyle = '#94A3B8';
+  ctx.fillStyle = gridColor;
   ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const val = (maxTotal / 4) * i;
     const y = chartH - (chartH * i / 4) + 8;
     ctx.fillText(fmt(val), startX - 10, y + 3);
-    ctx.strokeStyle = 'rgba(0,0,0,0.04)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = gridLine; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(w, y); ctx.stroke();
   }
 
@@ -949,7 +1034,7 @@ function renderDailyChart() {
   });
 
   // X labels
-  ctx.fillStyle = '#94A3B8'; ctx.textAlign = 'center';
+  ctx.fillStyle = gridColor; ctx.textAlign = 'center';
   ctx.font = '500 10px Inter, system-ui';
   const step = Math.max(1, Math.floor(data.length / 7));
   data.forEach((d, i) => {
@@ -1014,15 +1099,15 @@ function renderModelChart() {
     ctx.fill();
 
     // Gap between slices
-    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = isDark() ? '#1E293B' : '#FFFFFF'; ctx.lineWidth = 2; ctx.stroke();
     angle += sa;
   });
 
-  ctx.fillStyle = '#0F172A'; ctx.textAlign = 'center';
+  ctx.fillStyle = isDark() ? '#E2E8F0' : '#0F172A'; ctx.textAlign = 'center';
   ctx.font = '800 17px Inter, system-ui';
   ctx.fillText(fmt(total), cx, cy + 2);
   ctx.font = '500 10px Inter, system-ui';
-  ctx.fillStyle = '#94A3B8';
+  ctx.fillStyle = isDark() ? '#64748B' : '#94A3B8';
   ctx.fillText('total', cx, cy + 16);
 
   const totalCost = slices.reduce((s, d) => s + (d.costUSD || 0), 0);
